@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JNTUH AI Predicted Paper Engine — by Nikhil Sriramoju</title>
+<meta name="description" content="RAG + CNN-OCR powered predicted question paper generator for JNTUH R22 subjects, by Nikhil Chary Sriramoju.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237f77dd'/%3E%3Cstop offset='1' stop-color='%231d9e75'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='42' font-family='Arial,sans-serif' font-weight='700' font-size='26' fill='white' text-anchor='middle'%3ENS%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0c12; --panel:#12151e; --panel2:#1a1f2c; --border:#262c3a;
+    --text:#eef0f4; --muted:#8d94a3; --accent:#7f77dd; --accent2:#1d9e75;
+    --danger:#e24b4a; --glow:rgba(127,119,221,.35);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:radial-gradient(circle at 20% 0%, #161a2b 0%, var(--bg) 55%); color:var(--text); line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:28px 16px 90px;}
+  .navbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:34px;}
+  .brand{display:flex; align-items:center; gap:12px;}
+  .logo{
+    width:44px; height:44px; border-radius:13px; flex-shrink:0;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:16px; color:#fff; letter-spacing:.02em;
+    box-shadow:0 4px 16px var(--glow);
+  }
+  .brand-text{display:flex; flex-direction:column; line-height:1.25;}
+  .brand-text b{font-size:14px; font-weight:700;}
+  .brand-text span{font-size:11px; color:var(--muted);}
+  .hero{display:flex; align-items:center; gap:12px; margin-bottom:6px;}
+  .hero-badge{
+    font-size:11px; padding:4px 10px; border-radius:999px; letter-spacing:.03em;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#fff; font-weight:600;
+  }
+  h1{font-size:22px; font-weight:700; margin:0; background:linear-gradient(90deg,#fff,#b8b3f2); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .subtitle{color:var(--muted); font-size:14px; margin:8px 0 26px;}
+  .stagebar{display:flex; gap:6px; margin-bottom:22px;}
+  .stagebar div{flex:1; height:4px; border-radius:2px; background:var(--panel2);}
+  .stagebar div.active{background:linear-gradient(90deg,var(--accent),var(--accent2));}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:20px; margin-bottom:16px; position:relative; overflow:hidden;
+  }
+  .card::before{
+    content:""; position:absolute; inset:0; border-radius:14px; padding:1px;
+    background:linear-gradient(135deg, rgba(127,119,221,.25), transparent 40%);
+    -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude; pointer-events:none;
+  }
+  .card h2{font-size:15px; font-weight:600; margin:0 0 12px; display:flex; align-items:center; gap:8px;}
+  .badge{
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
+    background:var(--panel2); color:var(--muted); border:1px solid var(--border);
+  }
+  .badge.ai{color:#b8b3f2; border-color:var(--accent);}
+  label{display:block; font-size:13px; color:var(--muted); margin:12px 0 6px;}
+  label:first-child{margin-top:0;}
+  input[type=text]{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:14px;
+  }
+  input[type=text]:focus, textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--glow);}
+  .drop{
+    border:1.5px dashed var(--border); border-radius:10px; padding:18px;
+    text-align:center; cursor:pointer; font-size:13px; color:var(--muted);
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--accent); background:rgba(127,119,221,0.08); color:var(--text);}
+  .filelist{margin-top:8px; font-size:12px; color:var(--muted);}
+  .filelist div{padding:4px 0; display:flex; justify-content:space-between; gap:8px;}
+  .filelist button{background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;}
+  @media(max-width:600px){.row2,.row3{grid-template-columns:1fr;}}
+  select{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:14px;
+  }
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-top:1px solid var(--border);}
+  .toggle-row:first-of-type{border-top:none;}
+  .toggle-row span{font-size:13px;}
+  .toggle-row small{display:block; color:var(--muted); font-size:11px; margin-top:2px;}
+  .switch{position:relative; width:40px; height:22px; flex-shrink:0;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider{position:absolute; inset:0; background:var(--panel2); border:1px solid var(--border); border-radius:22px; cursor:pointer; transition:.15s;}
+  .slider::before{content:""; position:absolute; width:16px; height:16px; left:2px; top:2px; background:var(--muted); border-radius:50%; transition:.15s;}
+  input:checked + .slider{background:linear-gradient(90deg,var(--accent),var(--accent2)); border-color:transparent;}
+  input:checked + .slider::before{transform:translateX(18px); background:#fff;}
+  button.primary{
+    width:100%; margin-top:20px; padding:15px; border:none; border-radius:10px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2)); color:white; font-size:15px; font-weight:700; cursor:pointer;
+    box-shadow:0 6px 20px var(--glow);
+  }
+  button.primary:disabled{opacity:.5; cursor:not-allowed; box-shadow:none;}
+  button.primary:hover:not(:disabled){filter:brightness(1.08);}
+  .status{
+    display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted); margin-top:14px;
+  }
+  .spinner{
+    width:16px; height:16px; border-radius:50%; border:2px solid var(--border);
+    border-top-color:var(--accent); animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .steps{margin-top:10px; font-size:12px; color:var(--muted);}
+  .steps div{padding:3px 0; display:flex; gap:8px; align-items:center;}
+  .steps .done{color:var(--accent2);}
+  .steps .current{color:var(--text); font-weight:600;}
+  .error{color:var(--danger); font-size:13px; margin-top:10px;}
+  #analysisBox{display:none;}
+  #analysisBox.show{display:block;}
+  #output{display:none;}
+  #output.show{display:block;}
+  .conf-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:10px;}
+  @media(max-width:600px){.conf-grid{grid-template-columns:1fr 1fr;}}
+  .conf-card{background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center;}
+  .conf-card .val{font-size:20px; font-weight:700; color:var(--accent2);}
+  .conf-card .lbl{font-size:11px; color:var(--muted); margin-top:2px;}
+  .paper{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:28px; font-size:14.5px;
+  }
+  .paper h1,.paper h2,.paper h3{font-weight:600; border-bottom:1px solid var(--border); padding-bottom:6px;}
+  .paper table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13px;}
+  .paper th,.paper td{border:1px solid var(--border); padding:6px 10px; text-align:left;}
+  .paper th{background:var(--panel2);}
+  .paper details{
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    padding:10px 14px; margin:10px 0;
+  }
+  .paper summary{cursor:pointer; font-weight:600; color:var(--accent);}
+  .paper code{background:var(--panel2); padding:2px 5px; border-radius:4px; font-size:13px;}
+  .paper pre{background:#05060a; padding:12px; border-radius:8px; overflow-x:auto;}
+  .paper pre code{background:none; padding:0;}
+  .toolbar{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+  .toolbar button{
+    padding:8px 14px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:13px; cursor:pointer;
+  }
+  .toolbar button:hover{border-color:var(--accent);}
+  .footer-credit{
+    text-align:center; margin-top:32px; padding-top:18px; border-top:1px solid var(--border);
+    font-size:12px; color:var(--muted);
+  }
+  .footer-credit b{color:var(--text);}
+  .footer-credit a{color:var(--accent); text-decoration:none;}
+  .footer-credit a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="navbar">
+    <div class="brand">
+      <div class="logo">NS</div>
+      <div class="brand-text">
+        <b>Nikhil Sriramoju</b>
+        <span>AI Systems · JNTUH Paper Engine</span>
+      </div>
+    </div>
+    <a href="https://github.com/Nikhil-creat" target="_blank" style="color:var(--muted); text-decoration:none; font-size:13px; border:1px solid var(--border); padding:6px 12px; border-radius:8px;">GitHub ↗</a>
+  </div>
+  <div class="hero">
+    <h1>JNTUH AI Predicted Paper Engine</h1>
+    <span class="hero-badge">RAG + CNN OCR · v3</span>
+  </div>
+  <p class="subtitle">RAG-based retrieval over your syllabus/PYQs + CNN-based OCR for scanned papers, feeding a 3-stage AI generation pipeline — for any R22 subject, with confidence scoring built in.</p>
+
+  <div class="stagebar"><div class="active"></div><div id="sb2"></div><div id="sb3"></div></div>
+
+  <div class="card">
+    <h2>1 · Subject details <span class="badge">required</span></h2>
+    <label>Subject name & course code</label>
+    <input type="text" id="subjectName" placeholder="e.g. CS403PC - Database Management Systems">
+    <div class="row3">
+      <div>
+        <label>Regulation</label>
+        <input type="text" id="regulation" value="R22">
+      </div>
+      <div>
+        <label>Branch</label>
+        <input type="text" id="branch" value="CSE">
+      </div>
+      <div>
+        <label>Difficulty calibration</label>
+        <select id="difficulty">
+          <option value="balanced" selected>Balanced (pass + distinction mix)</option>
+          <option value="pass-focus">Pass-focus (safe, high-yield)</option>
+          <option value="distinction">Distinction-push (harder, analytical)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Syllabus <span class="badge">required</span></h2>
+    <div class="drop" id="dropSyllabus">Drop syllabus PDF/text here, or click to choose a file<br><small>(or paste text below instead)</small></div>
+    <input type="file" id="fileSyllabus" accept=".pdf,.txt" style="display:none">
+    <div class="filelist" id="listSyllabus"></div>
+    <label>...or paste syllabus text directly</label>
+    <textarea id="syllabusText" rows="4" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;" placeholder="Unit I: ... Unit II: ..."></textarea>
+  </div>
+
+  <div class="card">
+    <h2>3 · Previous year question papers <span class="badge">recommended, multiple files ok</span></h2>
+    <div class="drop" id="dropPyq">Drop 2-5 years of PYQ PDFs here, or click to choose files</div>
+    <input type="file" id="filePyq" accept=".pdf,.txt" multiple style="display:none">
+    <div class="filelist" id="listPyq"></div>
+  </div>
+
+  <div class="card">
+    <h2>4 · AI engine settings <span class="badge ai">advanced</span></h2>
+    <div class="toggle-row">
+      <div><span>RAG retrieval engine</span><small>Chunks + TF-IDF ranks your syllabus/PYQ text and retrieves only the most relevant passages per unit, instead of blind truncation — higher signal, less noise for the AI</small></div>
+      <label class="switch"><input type="checkbox" id="ragEnabled" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><span>CNN-OCR for scanned PYQs</span><small>Runs convolutional-network-based text recognition on image-only/scanned PDF pages that pdf.js can't read directly</small></div>
+      <label class="switch"><input type="checkbox" id="ocrEnabled" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><span>Deep frequency analysis pass</span><small>Extracts a structured unit-wise topic/frequency map before generating — meaningfully improves accuracy</small></div>
+      <label class="switch"><input type="checkbox" id="deepAnalysis" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><span>Extended reasoning mode</span><small>Asks the model to think step-by-step through PYQ patterns before drafting each set</small></div>
+      <label class="switch"><input type="checkbox" id="extendedReasoning" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><span>Self-verification pass</span><small>Model re-checks its own paper for structure/mark-total/Bloom's-tag errors before finalizing</small></div>
+      <label class="switch"><input type="checkbox" id="selfVerify" checked><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <button class="primary" id="genBtn">Generate predicted papers</button>
+  <div class="status" id="status" style="display:none;"></div>
+  <div class="steps" id="stepsBox"></div>
+  <div class="error" id="errBox" style="display:none;"></div>
+
+  <div class="card" id="analysisBox">
+    <h2>AI pattern analysis <span class="badge ai">stage 1 output</span></h2>
+    <div class="conf-grid" id="confGrid"></div>
+    <div id="analysisContent" style="margin-top:14px; font-size:13.5px;"></div>
+  </div>
+
+  <div id="output">
+    <div class="toolbar">
+      <span class="badge ai" style="align-self:center;">Preview — verify before downloading</span>
+    </div>
+    <div class="toolbar">
+      <button id="copyBtn">Copy markdown</button>
+      <button id="downloadBtn">Download .md</button>
+      <button id="downloadPdfBtn">⬇ Download PDF</button>
+      <button id="downloadJpgBtn">⬇ Download JPG</button>
+      <button id="regenBtn">Regenerate</button>
+    </div>
+    <div class="paper" id="paperContent"></div>
+  </div>
+</div>
+
+<script>
+const state = { syllabusFiles: [], pyqFiles: [], lastMarkdown: '', analysisJson: null };
+
+function setupDrop(dropId, inputId, listId, arr, multiple){
+  const drop = document.getElementById(dropId);
+  const input = document.getElementById(inputId);
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('drag');
+    handleFiles(e.dataTransfer.files, arr, listId, multiple);
+  });
+  input.addEventListener('change', e => handleFiles(e.target.files, arr, listId, multiple));
+}
+
+function handleFiles(files, arr, listId, multiple){
+  if(!multiple) arr.length = 0;
+  for(const f of files) arr.push(f);
+  renderList(arr, listId);
+}
+
+function renderList(arr, listId){
+  const el = document.getElementById(listId);
+  el.innerHTML = arr.map((f,i) => `<div><span>${f.name}</span><button data-idx="${i}" data-list="${listId}">remove</button></div>`).join('');
+  el.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = +btn.dataset.idx;
+      const targetArr = btn.dataset.list === 'listSyllabus' ? state.syllabusFiles : state.pyqFiles;
+      targetArr.splice(idx,1);
+      renderList(targetArr, btn.dataset.list);
+    });
+  });
+}
+
+setupDrop('dropSyllabus','fileSyllabus','listSyllabus', state.syllabusFiles, false);
+setupDrop('dropPyq','filePyq','listPyq', state.pyqFiles, true);
+
+async function extractPdfText(file, ocrEnabled, onOcrPage){
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  let text = '';
+  let ocrWorker = null;
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(it => it.str).join(' ');
+    if(pageText.trim().length > 20){
+      text += pageText + '\n';
+    } else if(ocrEnabled){
+      // Scanned/image-only page — fall back to CNN-based OCR (Tesseract's recognizer
+      // uses convolutional feature layers ahead of its sequence model)
+      if(onOcrPage) onOcrPage(i, pdf.numPages);
+      if(!ocrWorker) ocrWorker = await Tesseract.createWorker('eng');
+      const viewport = page.getViewport({scale: 2});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+      const { data: { text: ocrText } } = await ocrWorker.recognize(canvas);
+      text += ocrText + '\n';
+    }
+  }
+  if(ocrWorker) await ocrWorker.terminate();
+  return text;
+}
+
+async function extractFile(file, ocrEnabled, onOcrPage){
+  if(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')){
+    return await extractPdfText(file, ocrEnabled, onOcrPage);
+  }
+  return await file.text();
+}
+
+/* ---------- RAG retrieval engine (client-side TF-IDF chunk ranking) ---------- */
+function chunkText(text, size=800, overlap=100){
+  const chunks = [];
+  let i = 0;
+  while(i < text.length){
+    chunks.push(text.slice(i, i+size));
+    i += (size - overlap);
+  }
+  return chunks.filter(c => c.trim().length > 30);
+}
+
+function tokenize(str){
+  return (str.toLowerCase().match(/[a-z0-9]{3,}/g) || []);
+}
+
+function tfidfRank(chunks, queryTerms){
+  const df = {};
+  const chunkTokens = chunks.map(c => tokenize(c));
+  chunkTokens.forEach(tokens => {
+    new Set(tokens).forEach(t => df[t] = (df[t]||0) + 1);
+  });
+  const N = chunks.length || 1;
+  return chunks.map((chunk, idx) => {
+    const tokens = chunkTokens[idx];
+    const tf = {};
+    tokens.forEach(t => tf[t] = (tf[t]||0) + 1);
+    let score = 0;
+    queryTerms.forEach(q => {
+      if(tf[q]){
+        const idf = Math.log((N+1) / ((df[q]||0)+1)) + 1;
+        score += (tf[q] / (tokens.length||1)) * idf;
+      }
+    });
+    return { chunk, score };
+  }).sort((a,b) => b.score - a.score);
+}
+
+function ragRetrieve(fullText, unitQueries, topKPerUnit=3, chunkSize=800){
+  const chunks = chunkText(fullText, chunkSize);
+  if(chunks.length === 0) return fullText;
+  const selected = new Set();
+  unitQueries.forEach(q => {
+    const terms = tokenize(q);
+    const ranked = tfidfRank(chunks, terms).slice(0, topKPerUnit);
+    ranked.forEach(r => { if(r.score > 0) selected.add(r.chunk); });
+  });
+  if(selected.size === 0) return chunks.slice(0, 10).join('\n---\n');
+  return Array.from(selected).join('\n---\n');
+}
+
+function setStatus(msg){
+  const s = document.getElementById('status');
+  if(!msg){ s.style.display='none'; return; }
+  s.style.display='flex';
+  s.innerHTML = `<div class="spinner"></div><span>${msg}</span>`;
+}
+
+function setSteps(list, currentIdx){
+  const box = document.getElementById('stepsBox');
+  box.innerHTML = list.map((s,i) => {
+    const cls = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : '');
+    const icon = i < currentIdx ? '✓' : (i === currentIdx ? '›' : '·');
+    return `<div class="${cls}">${icon} ${s}</div>`;
+  }).join('');
+}
+
+function setError(msg){
+  const e = document.getElementById('errBox');
+  if(!msg){ e.style.display='none'; return; }
+  e.style.display='block'; e.textContent = msg;
+}
+
+async function callClaude(system, user, maxTokens){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: maxTokens || 1000,
+      system: system,
+      messages: [{ role: "user", content: user }]
+    })
+  });
+  if(!response.ok) throw new Error('API request failed: ' + response.status);
+  const data = await response.json();
+  return data.content.map(b => b.text || '').join('\n');
+}
+
+function extractJson(text){
+  const cleaned = text.replace(/```json|```/g,'').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  return JSON.parse(cleaned.slice(start, end+1));
+}
+
+const STEP_LABELS = [
+  'Reading files (CNN-OCR for scanned pages)',
+  'RAG retrieval: ranking most relevant passages',
+  'Running deep frequency analysis (stage 1 AI pass)',
+  'Generating Set A + Set B (stage 2 AI pass)',
+  'Self-verification & structure check (stage 3 AI pass)',
+  'Rendering final paper'
+];
+
+async function generate(){
+  setError('');
+  const subject = document.getElementById('subjectName').value.trim();
+  const regulation = document.getElementById('regulation').value.trim() || 'R22';
+  const branch = document.getElementById('branch').value.trim() || 'CSE';
+  const difficulty = document.getElementById('difficulty').value;
+  const pastedSyllabus = document.getElementById('syllabusText').value.trim();
+  const deepAnalysis = document.getElementById('deepAnalysis').checked;
+  const extendedReasoning = document.getElementById('extendedReasoning').checked;
+  const selfVerify = document.getElementById('selfVerify').checked;
+  const ragEnabled = document.getElementById('ragEnabled').checked;
+  const ocrEnabled = document.getElementById('ocrEnabled').checked;
+
+  if(!subject){ setError('Please enter the subject name and course code.'); return; }
+  if(state.syllabusFiles.length === 0 && !pastedSyllabus){ setError('Please upload a syllabus file or paste syllabus text.'); return; }
+
+  document.getElementById('genBtn').disabled = true;
+  document.getElementById('output').classList.remove('show');
+  document.getElementById('analysisBox').classList.remove('show');
+
+  const activeSteps = [STEP_LABELS[0]];
+  if(ragEnabled) activeSteps.push(STEP_LABELS[1]);
+  if(deepAnalysis) activeSteps.push(STEP_LABELS[2]);
+  activeSteps.push(STEP_LABELS[3]);
+  if(selfVerify) activeSteps.push(STEP_LABELS[4]);
+  activeSteps.push(STEP_LABELS[5]);
+
+  let stepIdx = 0;
+  setSteps(activeSteps, stepIdx);
+
+  try{
+    setStatus('Reading files...');
+    let syllabusText = pastedSyllabus;
+    for(const f of state.syllabusFiles){
+      syllabusText += '\n' + await extractFile(f, ocrEnabled, (p,total) => setStatus(`Running CNN-OCR on scanned page ${p}/${total} of ${f.name}...`));
+    }
+
+    let pyqText = '';
+    for(const f of state.pyqFiles){
+      pyqText += `\n--- PYQ FILE: ${f.name} ---\n` + await extractFile(f, ocrEnabled, (p,total) => setStatus(`Running CNN-OCR on scanned page ${p}/${total} of ${f.name}...`));
+    }
+
+    if(ragEnabled){
+      setStatus('RAG: chunking and ranking most relevant passages...');
+      const unitQueries = ['unit 1 topics definitions','unit 2 algorithms methods','unit 3 concepts design','unit 4 analysis applications','unit 5 advanced topics case study','previous exam questions marks'];
+      syllabusText = ragRetrieve(syllabusText, unitQueries.slice(0,5), 4, 700);
+      if(pyqText.trim()) pyqText = ragRetrieve(pyqText, unitQueries, 5, 700);
+    } else {
+      syllabusText = syllabusText.slice(0, 15000);
+      pyqText = pyqText.slice(0, 30000);
+    }
+
+    stepIdx++;
+    let analysisJson = null;
+
+    if(deepAnalysis){
+      setStatus('Stage 1: extracting unit-wise topic frequency map...');
+      setSteps(activeSteps, stepIdx);
+      const analysisSystem = `You are a JNTUH ${regulation} exam pattern analyst. Extract a structured, purely factual topic-frequency map from the syllabus and PYQs given. Return ONLY valid JSON, no prose, no markdown fences, in this shape:
+{"units":[{"unit":1,"title":"...","high_frequency_topics":[{"topic":"...","repeat_years":<int>,"stars":<int 1-4>}],"secondary_topics":["..."],"pyq_repeat_count":<int estimate>}],"overall_confidence_pct":<int 0-100>,"years_of_pyqs_analyzed":<int>,"topics_covered_pct":<int 0-100>,"notes":"one line"}
+"stars" must equal min(repeat_years,4) — this drives a ★ rating shown to students on the final paper, so be precise and conservative rather than inflating stars.`;
+      const analysisUser = `SUBJECT: ${subject}\n\nSYLLABUS:\n${syllabusText}\n\nPYQs:\n${pyqText || '(none provided)'}\n\nExtract the topic-frequency map now.`;
+      const analysisRaw = await callClaude(analysisSystem, analysisUser, 1000);
+      try{ analysisJson = extractJson(analysisRaw); }catch(e){ analysisJson = null; }
+
+      if(analysisJson){
+        state.analysisJson = analysisJson;
+        renderAnalysis(analysisJson);
+      }
+    }
+
+    stepIdx++;
+    setStatus('Stage 2: generating Set A + Set B...');
+    setSteps(activeSteps, stepIdx);
+
+    const systemPrompt = buildSystemPrompt(subject, regulation, branch, difficulty, extendedReasoning);
+    const userPrompt = buildUserPrompt(subject, syllabusText, pyqText, analysisJson);
+    let paperText = await callClaude(systemPrompt, userPrompt, 1000);
+
+    if(selfVerify){
+      stepIdx++;
+      setStatus('Stage 3: self-verification pass (checking marks totals, Bloom\\'s tags, structure)...');
+      setSteps(activeSteps, stepIdx);
+      const verifySystem = `You are a strict JNTUH ${regulation} paper-setting quality auditor. You will be given a generated predicted paper package. Check: (1) Part A totals exactly 10 marks, (2) each Part B question totals exactly 10 marks with valid internal choice, (3) every question has a Bloom's tag and CO tag, (4) both sets combined cover all 5 units, (5) markdown/HTML dropdown syntax is valid. Fix any issues you find silently and output the FULL corrected paper package in the same format, unchanged where already correct. Do not add commentary about what you fixed. Keep the footer credit block exactly as given.`;
+      paperText = await callClaude(verifySystem, paperText, 1000);
+    }
+
+    stepIdx++;
+    setSteps(activeSteps, stepIdx);
+    setStatus('Rendering...');
+
+    state.lastMarkdown = paperText;
+    document.getElementById('paperContent').innerHTML = marked.parse(paperText);
+    document.getElementById('output').classList.add('show');
+    setStatus('');
+    setSteps(activeSteps, activeSteps.length);
+  }catch(err){
+    console.error(err);
+    setError('Something went wrong: ' + err.message + '. Try again, or reduce the number/size of uploaded files.');
+    setStatus('');
+  }finally{
+    document.getElementById('genBtn').disabled = false;
+  }
+}
+
+function renderAnalysis(json){
+  const grid = document.getElementById('confGrid');
+  grid.innerHTML = `
+    <div class="conf-card"><div class="val">${json.overall_confidence_pct ?? '—'}%</div><div class="lbl">Prediction confidence</div></div>
+    <div class="conf-card"><div class="val">${json.years_of_pyqs_analyzed ?? '—'}</div><div class="lbl">Years of PYQs analyzed</div></div>
+    <div class="conf-card"><div class="val">${json.topics_covered_pct ?? '—'}%</div><div class="lbl">Syllabus coverage target</div></div>
+  `;
+  const content = document.getElementById('analysisContent');
+  const units = json.units || [];
+  content.innerHTML = units.map(u => {
+    const hf = (u.high_frequency_topics||[]).map(t => {
+      if(typeof t === 'string') return t;
+      const stars = '★'.repeat(t.stars||1);
+      return `${t.topic} <span style="color:#f0c419;">${stars}</span>`;
+    }).join(', ');
+    return `
+    <div style="margin-bottom:10px;">
+      <b>Unit ${u.unit}${u.title ? ' — ' + u.title : ''}</b> <span class="badge">${u.pyq_repeat_count ?? '?'} repeats seen</span><br>
+      <span style="color:var(--muted); font-size:12.5px;">High-frequency: ${hf || '—'}</span><br>
+      <span style="color:var(--muted); font-size:12.5px;">Secondary: ${(u.secondary_topics||[]).join(', ') || '—'}</span>
+    </div>
+  `;}).join('') + (json.notes ? `<div style="margin-top:8px; font-size:12px; color:var(--muted);">${json.notes}</div>` : '');
+  document.getElementById('analysisBox').classList.add('show');
+}
+
+function buildSystemPrompt(subject, regulation, branch, difficulty, extendedReasoning){
+  const diffText = {
+    'balanced': 'Balance the paper for both safe pass-marks questions and a few distinction-level analytical questions.',
+    'pass-focus': 'Weight the paper toward safe, high-frequency, straightforward questions that maximize pass-mark security.',
+    'distinction': 'Weight the paper toward harder, analytical, multi-step and design/evaluate-level (L4-L6) questions suited for distinction-seeking students.'
+  }[difficulty] || '';
+
+  const reasoningClause = extendedReasoning
+    ? 'Before writing the final paper, briefly reason internally through the PYQ repetition patterns and syllabus weightage to decide topic placement — but output only the final structured result, not your internal reasoning.'
+    : '';
+
+  return `You are an expert academic exam analyst and JNTUH ${branch} question paper setter, specialized in ${regulation} regulations, enhanced with a deep topic-frequency analysis pipeline for high prediction accuracy.
+Your job: analyze a syllabus, previous year question papers, and (if provided) a structured topic-frequency map, then produce two distinct predicted question papers (SET A and SET B) for the subject "${subject}".
+
+${diffText}
+${reasoningClause}
+
+STRICT JNTUH ${regulation} PAPER STRUCTURE (60 marks, 3 hours):
+- Part A (10 marks, compulsory): Q1(a-j), 1 mark each, 2 sub-questions mapped from each of 5 units, Bloom's L1/L2 only.
+- Part B (50 marks): Q2-Q6, one 10-mark main question per unit, each with internal choice ("Q[N] a&b OR Q[N] a&b"), split as 5+5 or 6+4 marks.
+
+Diversification: Set A = highest-frequency PYQ topics/standard derivations. Set B = complementary/"OR"-choice/untapped high-yield topics. Zero exact question overlap between sets. Combined coverage ~85-90% of syllabus.
+
+Every question must be tagged with Bloom's level [L1-L6], course outcome [CO#], and where relevant [DIAGRAM REQUIRED]/[CODE REQUIRED]/[NUMERICAL], plus target completion time.
+
+REPETITION STAR RATING (mandatory): Prefix every question (Part A sub-questions and Part B main questions) with star symbols showing how often that exact topic/question pattern has repeated across the analyzed PYQs: ★ = appeared in 1 prior year/low frequency, ★★ = 2 years, ★★★ = 3 years, ★★★★ = 4+ years/extremely core topic. A topic with no clear PYQ repetition gets no star. Base star counts on the structured topic-frequency data if provided, otherwise on your own PYQ analysis. Add a one-line legend right under each paper's title explaining the star scale.
+
+Output strictly in clean Markdown with GFM tables, LaTeX ($...$), fenced code blocks with language tags, and HTML <details><summary><b>...</b></summary><br>
+
+...</details> dropdowns for every solution (blank line after </summary> and <br>). Each dropdown must contain: Quick Formula & Key Concept Cheat Sheet, Step-by-Step Solution, JNTUH Evaluation Marking Scheme (partial credit breakdown by cognitive level).
+
+Follow this exact output sequence: (1) Trend summary & Bloom's distribution, (2) Set A vs Set B topic matrix table, (3) Full SET A paper, (4) Full SET B paper, (5) All solutions in dropdowns for both sets, (6) Dual-set self-assessment scorecard table, (7) Master Formula/Schema/Code cheat sheet (all 5 units).
+
+End the entire output with this exact footer, unchanged:
+
+---
+**Designed and developed by NIKHIL CHARY SRIRAMOJU**
+GitHub: https://github.com/Nikhil-creat | LinkedIn: https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a | Email: sriramojunikhil66@gmail.com`;
+}
+
+function buildUserPrompt(subject, syllabusText, pyqText, analysisJson){
+  return `SUBJECT: ${subject}
+
+SYLLABUS:
+${syllabusText || '(none provided — infer standard JNTUH syllabus structure for this subject if you know it, and state this assumption at the top)'}
+
+PREVIOUS YEAR QUESTION PAPERS:
+${pyqText || '(none provided — base predictions on standard high-frequency topics for this subject and state this assumption at the top)'}
+
+${analysisJson ? 'STRUCTURED TOPIC-FREQUENCY ANALYSIS (use this as your primary basis for topic selection):\n' + JSON.stringify(analysisJson, null, 2) : ''}
+
+Generate the complete two-set predicted paper package now, following the system instructions exactly.`;
+}
+
+document.getElementById('genBtn').addEventListener('click', generate);
+document.getElementById('regenBtn').addEventListener('click', generate);
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(state.lastMarkdown);
+  const btn = document.getElementById('copyBtn');
+  const orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = orig, 1500);
+});
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([state.lastMarkdown], {type:'text/markdown'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'predicted-paper.md'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+async function captureCanvas(){
+  const el = document.getElementById('paperContent');
+  const detailsEls = el.querySelectorAll('details');
+  const openStates = Array.from(detailsEls).map(d => d.open);
+  detailsEls.forEach(d => d.open = true); // expand all solution dropdowns for export
+  await new Promise(r => setTimeout(r, 150));
+  const canvas = await html2canvas(el, { backgroundColor:'#12151e', scale:2, useCORS:true, windowWidth: el.scrollWidth });
+  detailsEls.forEach((d,i) => d.open = openStates[i]);
+  return canvas;
+}
+
+document.getElementById('downloadJpgBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('downloadJpgBtn');
+  const orig = btn.textContent; btn.textContent = 'Rendering...'; btn.disabled = true;
+  try{
+    const canvas = await captureCanvas();
+    const link = document.createElement('a');
+    link.download = 'predicted-paper.jpg';
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+  }catch(e){ setError('JPG export failed: ' + e.message); }
+  finally{ btn.textContent = orig; btn.disabled = false; }
+});
+
+document.getElementById('downloadPdfBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('downloadPdfBtn');
+  const orig = btn.textContent; btn.textContent = 'Rendering...'; btn.disabled = true;
+  try{
+    const canvas = await captureCanvas();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'pt', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = canvas.height * (imgWidth / canvas.width);
+    let heightLeft = imgHeight;
+    let position = 0;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while(heightLeft > 0){
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+    pdf.save('predicted-paper.pdf');
+  }catch(e){ setError('PDF export failed: ' + e.message); }
+  finally{ btn.textContent = orig; btn.disabled = false; }
+});
+</script>
+
+<div class="wrap footer-credit">
+  <div class="logo" style="margin:0 auto 12px; width:36px; height:36px; font-size:13px;">NS</div>
+  Designed and developed by <b>Nikhil Chary Sriramoju</b><br>
+  <a href="https://github.com/Nikhil-creat" target="_blank">GitHub</a> ·
+  <a href="https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a" target="_blank">LinkedIn</a> ·
+  <a href="mailto:sriramojunikhil66@gmail.com">Email</a>
+</div>
+</body>
+</html>
