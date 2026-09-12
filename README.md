@@ -2,10 +2,12 @@
 
 RAG + CNN-OCR powered, 3-stage AI pipeline that generates two exam-ready predicted question papers (Set A / Set B) for any JNTUH R22 subject — with Bloom's taxonomy tagging, ★ repetition-frequency ratings, HTML dropdown solutions, marking rubrics, a self-assessment scorecard, and PDF/JPG/Markdown export.
 
-**Designed and developed by Nikhil Chary Sriramoju**
-- GitHub: https://github.com/Nikhil-creat
-- LinkedIn: https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a
-- Email: sriramojunikhil66@gmail.com
+**Designed and developed by NIKHIL CHARY SRIRAMOJU**
+
+- GitHub: [@Nikhil-creat](https://github.com/Nikhil-creat)
+- LinkedIn: [nikhil-chary-sriramoju](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a)
+- Instagram: [@nikhil__sriramoju](https://www.instagram.com/nikhil__sriramoju?stkn=MTFxdDZobmJtb2RoaA==)
+- 
 
 ## Features
 - Subject-agnostic — works for any JNTUH R22 subject
