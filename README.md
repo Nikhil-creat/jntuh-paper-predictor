@@ -34,9 +34,3 @@ This page calls the Anthropic API directly from the browser. Since GitHub Pages 
 
 No license specified — all rights reserved by the author unless stated otherwise.
 
-## 👤 Author
-
-**NIKHIL CHARY SRIRAMOJU**
-- GitHub: [@Nikhil-creat](https://github.com/Nikhil-creat)
-- LinkedIn: [nikhil-chary-sriramoju](https://in.linkedin.com/in/nikhil-chary-sriramoju-95041b38a)
-- Instagram: [@nikhil__sriramoju](https://www.instagram.com/nikhil__sriramoju?stkn=MTFxdDZobmJtb2RoaA==)
